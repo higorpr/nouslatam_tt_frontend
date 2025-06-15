@@ -1,1 +1,1 @@
-# nouslatam_TT_frontend
+# nouslatam_Technical_Challenge_frontend
