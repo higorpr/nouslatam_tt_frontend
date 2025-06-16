@@ -10,6 +10,16 @@ import {
 } from "react";
 import api from "@/services/api";
 import { useRouter } from "next/navigation";
+import { set } from "zod";
+
+// Register form interface
+interface RegisterData {
+  username: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  password: string;
+}
 
 // Create user interface
 interface User {
@@ -22,9 +32,11 @@ interface User {
 // Create interface for authentication type
 interface AuthContextType {
   isAuthenticated: boolean;
+  isLoading: boolean;
   user: User | null;
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
+  register: (data: RegisterData) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -32,7 +44,21 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
+
+  const logout = useCallback(() => {
+    // Remove tokens from local storage
+    localStorage.removeItem("accessToken");
+    localStorage.removeItem("refreshToken");
+    // Clean axios headers
+    delete api.defaults.headers.Authorization;
+    // Clean states
+    setUser(null);
+    setIsAuthenticated(false);
+    // Redirect to login
+    router.push("/login");
+  }, [router]);
 
   // Function to get user data from the API if token is in local storage
   const fetchUser = useCallback(async () => {
@@ -41,24 +67,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         // Define token in axios for future requests
         api.defaults.headers.Authorization = `Bearer ${token}`;
+        // Fetch user
         const response = await api.get("/users/me/");
+        // Update states if successful
         setUser(response.data);
         setIsAuthenticated(true);
       } catch (error) {
-        console.error("Invalid token error:", error);
+        // Case where token is invalid
+        console.error("Invalid token error, cleaning session:", error);
+        // Clean session
         logout();
+      } finally {
+        // Loading finished independently of success
+        setIsLoading(false);
       }
     } else {
       // Clean states if there is no token
       setIsAuthenticated(false);
       setUser(null);
+      setIsLoading(false);
     }
-  }, []);
+  }, [logout]);
 
   // Runs fetchUser function when the component mounts
   useEffect(() => {
     fetchUser();
   }, [fetchUser]);
+
+  const register = async (data: RegisterData) => {
+    // Register user request
+    await api.post("/users/register/", data);
+    // After successfull register, go to login page recording if success
+    router.push("/login?registered=true");
+  };
 
   const login = async (email: string, password: string) => {
     const response = await api.post("/token/", { username: email, password });
@@ -74,18 +115,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     router.push("/dashboard");
   };
 
-  const logout = () => {
-    // Remove tokens from local storage
-    localStorage.removeItem("accessToken");
-    localStorage.removeItem("refreshToken");
-    delete api.defaults.headers.Authorization;
-    setUser(null);
-    setIsAuthenticated(false);
-    router.push("/login");
-  };
-
   return (
-    <AuthContext.Provider value={{ isAuthenticated, user, login, logout }}>
+    <AuthContext.Provider
+      value={{ isAuthenticated, isLoading, user, login, logout, register }}
+    >
       {children}
     </AuthContext.Provider>
   );

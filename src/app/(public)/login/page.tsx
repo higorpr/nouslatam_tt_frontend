@@ -12,7 +12,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
-import { useState, FormEvent, Fragment } from "react";
+import { useState, FormEvent } from "react";
+import Link from "next/link";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -79,6 +80,12 @@ export default function LoginPage() {
               <Button className="w-full" type="submit" disabled={isLoading}>
                 {isLoading ? "Loading..." : "Login"}
               </Button>
+              <div className="mt-4 text-center text-sm">
+                Does not have an account?{" "}
+                <Link href="/register" className="underline">
+                  Click here to register
+                </Link>
+              </div>
             </div>
           </form>
         </CardContent>
