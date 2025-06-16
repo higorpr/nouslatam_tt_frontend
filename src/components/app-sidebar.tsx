@@ -11,7 +11,6 @@ import {
 } from "lucide-react";
 
 import { NavMain } from "@/components/nav-main";
-import { NavSecondary } from "@/components/nav-secondary";
 import { NavUser } from "@/components/nav-user";
 import {
   Sidebar,
@@ -29,11 +28,13 @@ const data = {
       title: "Tasks",
       url: "#",
       icon: ListChecks,
+      route:"/tasks"
     },
     {
       title: "Dashboard",
       url: "#",
       icon: LayoutDashboardIcon,
+      route:"/dashboard"
     },
   ],
 };

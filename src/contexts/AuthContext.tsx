@@ -1,3 +1,4 @@
+// Holds the authenticated user context
 "use client";
 
 import {
@@ -10,7 +11,6 @@ import {
 } from "react";
 import api from "@/services/api";
 import { useRouter } from "next/navigation";
-import { set } from "zod";
 
 // Register form interface
 interface RegisterData {
@@ -34,6 +34,8 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   user: User | null;
+  taskUpdateTrigger: number;
+  triggerTaskUpdate: () => void;
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
   register: (data: RegisterData) => Promise<void>;
@@ -42,9 +44,11 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  // Define global states
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [taskUpdateTrigger, setTaskUpdateTrigger] = useState(0);
   const router = useRouter();
 
   const logout = useCallback(() => {
@@ -89,7 +93,54 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [logout]);
 
-  // Runs fetchUser function when the component mounts
+  useEffect(() => {
+    const responseInterceptor = api.interceptors.response.use(
+      (response) => response,
+      async (error) => {
+        const originalRequest = error.config;
+
+        // Verify if is an unauthorized error and if the user did not retry
+        if (error.response.status === 401 && !originalRequest._retry) {
+          // Marks the request as retried to avoid loops
+          originalRequest._retry = true;
+
+          try {
+            const refreshToken = localStorage.getItem("refreshToken");
+
+            if (!refreshToken) {
+              logout();
+              return Promise.reject(error);
+            }
+            // API call to refresh token
+            const { data } = await api.post("/token/refresh/", {
+              refresh: refreshToken,
+            });
+
+            // If successful, update both tokens
+            localStorage.setItem("accessToken", data.access);
+            if (data.refresh) {
+              localStorage.setItem("refreshToken", data.refresh);
+            }
+
+            api.defaults.headers.Authorization = `Bearer ${data.access}`;
+
+            originalRequest.headers.Authorization = `Bearer ${data.access}`;
+
+            return api(originalRequest);
+          } catch (refreshError) {
+            console.error("Error refreshing token:", refreshError);
+            logout();
+            return Promise.reject(refreshError);
+          }
+        }
+        return Promise.reject(error);
+      }
+    );
+    return () => {
+      api.interceptors.response.eject(responseInterceptor);
+    };
+  }, [logout]);
+
   useEffect(() => {
     fetchUser();
   }, [fetchUser]);
@@ -115,12 +166,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     router.push("/dashboard");
   };
 
+  const triggerTaskUpdate = () => {
+    setTaskUpdateTrigger((prev) => prev + 1);
+  };
+
+  const contextValue = {
+    isAuthenticated,
+    isLoading,
+    taskUpdateTrigger,
+    triggerTaskUpdate,
+    user,
+    login,
+    logout,
+    register,
+  };
+
   return (
-    <AuthContext.Provider
-      value={{ isAuthenticated, isLoading, user, login, logout, register }}
-    >
-      {children}
-    </AuthContext.Provider>
+    <AuthContext.Provider value={contextValue}>{children}</AuthContext.Provider>
   );
 }
 
