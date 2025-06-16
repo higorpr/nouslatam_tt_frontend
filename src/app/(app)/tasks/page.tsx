@@ -18,27 +18,64 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { TaskFilters } from "@/components/task-filters";
+import { Skeleton } from "@/components/ui/skeleton";
+
+// Helper component for the loading state skeleton
+const TaskGridSkeleton = () => (
+  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+    {Array.from({ length: 4 }).map((_, index) => (
+      <Skeleton key={index} className="h-[180px] w-full rounded-lg" />
+    ))}
+  </div>
+);
 
 export default function TasksPage() {
+  // States to control task list change, loading and filters
   const [tasks, setTasks] = useState<Task[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const { isAuthenticated, taskUpdateTrigger } = useAuth();
+  const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
 
   // State to manage the confirmation dialog
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
 
-  // Function to fetch tasks
+  // Auth user states
+  const { isAuthenticated, taskUpdateTrigger } = useAuth();
+
+  // Hook to add debouncing effect to user typing
+  useEffect(() => {
+    const timerId = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 500); // Delay of 500ms
+
+    return () => {
+      clearTimeout(timerId);
+    };
+  }, [searchTerm]);
+
+  // Function to fetch tasks with filters
   const fetchTasks = useCallback(async () => {
+    // This now only sets loading to true when fetching
     setIsLoading(true);
     try {
-      const response = await api.get("/tasks/");
+      const params = new URLSearchParams();
+      if (debouncedSearchTerm) {
+        params.append("search", debouncedSearchTerm);
+      }
+      if (statusFilter) {
+        params.append("status", statusFilter);
+      }
+
+      const response = await api.get(`/tasks/?${params.toString()}`);
       setTasks(response.data.results);
     } catch (error) {
       console.error("Failed to fetch tasks:", error);
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [debouncedSearchTerm, statusFilter]); // Resets function if filters change
 
   // Fetch tasks when the component mounts, user auth changes or tasks are modified
   useEffect(() => {
@@ -50,23 +87,15 @@ export default function TasksPage() {
   // Function to handle the actual deletion via API
   const handleDeleteTask = async () => {
     if (!taskToDelete) return;
-
     try {
-      await api.delete(`/tasks/${taskToDelete.id}/`);
-
-      // Fetch tasks again to update the UI
+      await api.delete(`/tasks/${taskToDelete.id}`);
       await fetchTasks();
     } catch (error) {
       console.error("Failed to delete task:", error);
     } finally {
-      // Close the confirmation dialog
       setTaskToDelete(null);
     }
   };
-
-  if (isLoading) {
-    return <div className="p-6">Loading your tasks...</div>;
-  }
 
   return (
     <div className="p-4 md:p-6">
@@ -80,10 +109,19 @@ export default function TasksPage() {
         </TaskFormDialog>
       </header>
 
-      {tasks.length > 0 ? (
+      {/* Renders filter component with callback functions and the controlled value */}
+      <TaskFilters
+        searchValue={searchTerm}
+        onSearchChange={setSearchTerm}
+        onStatusChange={setStatusFilter}
+      />
+
+      {/* Renders the skeleton only on the task grid area when loading */}
+      {isLoading ? (
+        <TaskGridSkeleton />
+      ) : tasks.length > 0 ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {tasks.map((task) => (
-            // Pass a function to onDelete that opens the confirmation dialog
             <TaskCard
               key={task.id}
               task={task}
@@ -95,10 +133,7 @@ export default function TasksPage() {
       ) : (
         <div className="text-center py-10 border-2 border-dashed rounded-lg">
           <p className="text-muted-foreground">
-            You do not have any tasks yet.
-          </p>
-          <p className="text-sm text-muted-foreground mt-2">
-            Click Crete Task to get started.
+            No tasks found for the current filters.
           </p>
         </div>
       )}
@@ -113,7 +148,7 @@ export default function TasksPage() {
             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
             <AlertDialogDescription>
               This action cannot be undone. This will permanently delete the
-              task {taskToDelete?.title}.
+              task "{taskToDelete?.title}".
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

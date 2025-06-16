@@ -25,16 +25,16 @@ import {
 const data = {
   navMain: [
     {
-      title: "Tasks",
-      url: "#",
-      icon: ListChecks,
-      route:"/tasks"
-    },
-    {
       title: "Dashboard",
       url: "#",
       icon: LayoutDashboardIcon,
-      route:"/dashboard"
+      route: "/dashboard",
+    },
+    {
+      title: "Tasks",
+      url: "#",
+      icon: ListChecks,
+      route: "/tasks",
     },
   ],
 };
