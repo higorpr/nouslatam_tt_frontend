@@ -1,4 +1,3 @@
-// Holds the authenticated user context
 "use client";
 
 import {
@@ -41,7 +40,7 @@ interface AuthContextType {
   register: (data: RegisterData) => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   // Define global states
